@@ -1,0 +1,65 @@
+refine<-read.csv("refine_original.csv")
+library(dplyr) 
+library(stringi) 
+library(tidyr)
+
+#changing all text to title case
+colnames(refine)<-stri_trans_totitle(variable.names(refine))
+refine$Company<-stri_trans_totitle(refine$Company)
+refine$City<-stri_trans_totitle(refine$City)
+refine$Country<-stri_trans_totitle(refine$Country)
+refine$Name<-stri_trans_totitle(refine$Name)
+
+#correcting mispelling in company column
+company_mispellings <- levels(factor(refine$Company)) #to see the various mispellings
+company_corrections <- c(rep("Akzo",3), rep("Philips",6), rep("Unilever",2),"Van Houten")
+corrections_matrix <- cbind(company_mispellings,company_corrections)
+observation_number<-length(refine$Company)
+for(i in 1:observation_number){
+  for(j in 1:length(company_mispellings)){
+    if(refine$Company[i]==corrections_matrix[j,1]){
+    refine$Company[i]<-corrections_matrix[j,2]
+    }
+  }
+}
+
+#Separating Product Code and Number into their own columns
+refine <- separate(refine, Product.code...Number, into=c("Product Code", "Number"), sep="-")
+
+#Assigning product categories based on product code
+Product_Code<-levels(factor(refine$`Product Code`))
+Product_Categories<-c("Smartphone","Tablet","TV","Laptop")
+Product_Names<-cbind(Product_Code,Product_Categories)
+Product_Decoder <- function(x=""){
+  if(x=='p'){return("Smartphone")}
+  else if(x=='v'){return("TV")}
+  else if(x=='x'){return('Laptop')}
+  else if(x=='q'){return("Tablet")}
+  else(return(""))
+ }
+Product_Decoder<-Vectorize(Product_Decoder)
+refine <- mutate(refine,Product_Name=Product_Decoder(refine$`Product Code`))
+
+#Geocoding
+refine <- mutate(refine,'Full Address'=paste(refine$Address, refine$City, refine$Country,sep=", "))
+
+#Dummy variables for company and product category
+dummy<-function(x,y){
+  for(i in 1:length(x)){
+    if(x[i]==y)(return(1))
+  }
+  return(0)
+}
+dummy<-Vectorize(dummy)
+refine<-mutate(refine,Company_Akzo      =dummy(refine$Company,"Akzo"))
+refine<-mutate(refine,Company_Philips   =dummy(refine$Company,"Philips"))
+refine<-mutate(refine,Company_Van_Houten=dummy(refine$Company,"Van Houten"))
+refine<-mutate(refine,Company_Unilever  =dummy(refine$Company,"Unilever"))
+refine<-mutate(refine,Product_Smartphone=dummy(refine$Product_Name,"Smartphone"))
+refine<-mutate(refine,Product_TV        =dummy(refine$Product_Name,"TV"))
+refine<-mutate(refine,Product_Laptop    =dummy(refine$Product_Name,"Laptop"))
+refine<-mutate(refine,Product_Tablet    =dummy(refine$Product_Name,"Tablet"))
+
+#saving and cleaning up
+write.csv(refine, file = "refine_clean.csv")
+rm(company_corrections, company_mispellings, corrections_matrix, dummy, i, j, observation_number, Product_Categories, Product_Code, Product_Decoder, Product_Names, refine)
